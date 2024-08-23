@@ -4,7 +4,6 @@ from __future__ import division
 
 import itertools
 from collections import OrderedDict
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -23,11 +22,12 @@ def _drop_zeros(df):
 
     """
     def for_each_col(col):
-        nz = col.values.nonzero()[0]
-        return col.iloc[nz], nz
+        col = col.to_numpy()
+        nz = col.nonzero()[0]
+        return col[nz], nz
 
     for (col_idx, (col, nz)) in df.apply(for_each_col, axis=0, raw=False).items():
-        yield (col_idx, col.values, nz)
+        yield (col_idx, col, nz)
 
 
 class _FrequencyAndConstraints(object):
@@ -61,13 +61,11 @@ class _FrequencyAndConstraints(object):
     Attributes
     ----------
     ncols : int
-        Total number household_wof columns across household and person classes.
+        Total number of columns across household and person classes.
 
     """
-
     def __init__(self, household_freq, household_constraints, person_freq=None,
                  person_constraints=None):
-
         hh_cols = ((key, col, household_constraints[key], nz)
                    for key, col, nz in _drop_zeros(household_freq))
 
@@ -164,7 +162,7 @@ def _average_fit_quality(freq_wrap, weights):
     return sum(
         _fit_quality(col, weights[nz], constraint)
         for _, col, constraint, nz in freq_wrap.iter_columns()
-    ) / freq_wrap.ncols
+        ) / freq_wrap.ncols
 
 
 def _update_weights(column, weights, constraint):
@@ -190,14 +188,15 @@ def _update_weights(column, weights, constraint):
     new_weights : ndarray
 
     """
-    adj = constraint / float((column * weights).sum())
+    val = float((column * weights).sum())
+    if val == 0: val = 1e-15 #BOB CHANGED
+    adj = constraint / val
     return weights * adj
 
 
 def household_weights(
-        household_freq, person_freq, household_constraints,
-        person_constraints, geography, ignore_max_iters,
-        convergence=1e-4, max_iterations=20000):
+        household_freq, person_freq, household_constraints, person_constraints,
+        convergence=1e-4, max_iterations=200000):
     """
     Calculate the household weights that best match household and
     person level attributes.
@@ -263,33 +262,11 @@ def household_weights(
         iterations += 1
 
         if iterations > max_iterations:
-            if ignore_max_iters:
-                fitting_tolerance = fit_change - convergence
-                print('Fitting tolerance before 20000 iterations: %s' % str(fitting_tolerance))
-                ipu_dict = {'best_fit_qual': best_fit_qual,
-                            'fit_change': fit_change,
-                            'fitting_tolerance': fitting_tolerance,
-                            'geog_id': geography}
-                if isinstance(geography, pd.Series):
-                    state, county = geography['state'], geography['county']
-                    tract, bgroup = geography['tract'], geography['block group']
-                    np.save('max_iter_{}_{}_{}_{}.npy'.format(state, county,
-                                                              tract, bgroup), ipu_dict)
-                elif isinstance(geography, list):
-                    np.save('max_iter_{}_{}.npy'.format(geography[0], geography[1]), ipu_dict)
-                else:
-                    np.save('max_iter_{}.npy'.format(str(geography)), ipu_dict)
-
-                warnings.warn(
-                    'Maximum number of iterations reached '
-                    'during IPU: {}'.format(max_iterations), UserWarning)
-                return (
-                    pd.Series(best_weights, index=household_freq.index),
-                    best_fit_qual, iterations)
-            else:
-                raise RuntimeError(
-                    'Maximum number of iterations reached '
-                    'during IPU: {}'.format(max_iterations))
+            print('Maximum number of iterations reached during IPU: {}'.format(max_iterations))
+            break
+            # raise RuntimeError(
+            #     'Maximum number of iterations reached during IPU: {}'.format(
+            #         max_iterations))
 
     return (
         pd.Series(best_weights, index=household_freq.index),

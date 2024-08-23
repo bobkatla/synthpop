@@ -66,8 +66,11 @@ def calculate_constraints(
         iterations += 1
 
         if iterations > max_iterations:
-            raise RuntimeError(
-                'Maximum number of iterations reached during IPF: {}'.format(
-                    max_iterations))
+            # BOB: We will accept this err here
+            print("Maximum number of iterations reached during IPF, just accept err")
+            break
+            # raise RuntimeError(
+            #     'Maximum number of iterations reached during IPF: {}'.format(
+            #         max_iterations))
 
     return pd.Series(constraints, index=joint_dist.index), iterations

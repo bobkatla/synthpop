@@ -64,6 +64,7 @@ def joint_distribution(sample_df, category_df, mapping_functions=None):
     category_df["frequency"] = 0
 
     category_names = list(category_df.index.names)
+    # print(category_names)
     if mapping_functions:
         for name in category_names:
             assert name in mapping_functions, "Every category needs to have " \

@@ -124,6 +124,10 @@ def execute_draw(indexes, h_pums, p_pums, hh_index_start=0):
     return synth_hh, synth_people
 
 
+def cs(n, y):
+    return chisquare(n, np.sum(n)/np.sum(y) * y)
+
+
 def compare_to_constraints(synth, constraints):
     """
     Compare the results of a synthesis draw to the target constraints.
@@ -164,7 +168,7 @@ def compare_to_constraints(synth, constraints):
     w = constraints >= 1
     counts, constraints = counts[w], constraints[w]
 
-    return chisquare(counts.values, constraints.values)
+    return cs(counts.values, constraints.values)
 
 
 def draw_households(
@@ -219,16 +223,27 @@ def draw_households(
 
     best_chisq = np.inf
 
-    for _ in range(20):
-        indexes = _draw_indexes(num, fac, weights)
-        synth_hh, synth_people = execute_draw(
-            indexes, h_pums, p_pums, hh_index_start=hh_index_start)
-        people_chisq, people_p = compare_to_constraints(
-            synth_people.cat_id, person_constraints)
-
-        if people_chisq < best_chisq:
-            best_chisq = people_chisq
-            best_p = people_p
-            best_households, best_people = synth_hh, synth_people
+    # Bob changes a lot here
+    best_households, best_people = None, None
+    i = 0
+    while best_households is None:
+        i += 1
+        for _ in range(10):
+            indexes = _draw_indexes(num, fac, weights)
+            synth_hh, synth_people = execute_draw(
+                indexes, h_pums, p_pums, hh_index_start=hh_index_start)
+            people_chisq, people_p = compare_to_constraints(
+                synth_people.cat_id, person_constraints)
+            
+            if people_chisq < best_chisq:
+                best_chisq = people_chisq
+                best_p = people_p
+                best_households, best_people = synth_hh, synth_people
+            
+            if i == 5: # try to many times, this means 50 tries
+                best_chisq = people_chisq
+                best_p = people_p
+                best_households, best_people = synth_hh, synth_people
+                break
 
     return best_households, best_people, best_chisq, best_p
